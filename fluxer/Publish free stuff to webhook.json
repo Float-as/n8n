@@ -1,0 +1,508 @@
+{
+  "name": "Publish free stuff to webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e6dfd59b-d29a-4dd0-8b9b-9d225b2d727b",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.gamerpower.com/api/filter",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "{\n  \"platform\": \"steam+epic-games-store+gog\",\n  \"type\": \"game+loot\",\n  \"sort-by\": \"date\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        144,
+        0
+      ],
+      "id": "16e316d3-2a9f-48d9-85f0-48a7fc02d0df",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const g = item.json;\n\n  return {\n    json: {\n      id: g.id,\n      title: g.title,\n      worth: g.worth,\n\n      thumbnail: g.thumbnail,\n      image: g.image,\n\n      description: g.description,\n      instructions: g.instructions,\n\n      giveawayUrl: g.open_giveaway_url,\n      gamerpowerUrl: g.gamerpower_url,\n\n      publishedDate: g.published_date,\n      endDate: g.end_date,\n\n      type: g.type,\n      platforms: g.platforms,\n\n      users: g.users,\n      status: g.status\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        0
+      ],
+      "id": "fbff49d7-4db6-4096-b5cb-905b24f3d679",
+      "name": "Map fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.filter(item => {\n  const g = item.json;\n\n  const endDate = g.end_date !== \"N/A\"\n    ? new Date(g.end_date)\n    : null;\n\n  return (\n    g.status === \"Active\" &&\n    (!endDate || endDate > new Date())\n  );\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        0
+      ],
+      "id": "9e659a75-9d47-45c2-a140-4fffc42b1925",
+      "name": "Extract items valid"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "M47tIXuuRfbeluNM",
+          "mode": "list",
+          "cachedResultName": "gamerpower_seen",
+          "cachedResultUrl": "/projects/vFOqNMYXm28VHc07/datatables/M47tIXuuRfbeluNM"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "title": "={{ $json.title }}",
+            "item_id": "={{ $json.id }}",
+            "ends_at": "={{ \n  $json.endDate === \"N/A\" \n    ? \"9999-12-31T23:59:59.999Z\" \n    : $json.endDate \n}}"
+          },
+          "matchingColumns": [
+            "title"
+          ],
+          "schema": [
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "item_id",
+              "displayName": "item_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "ends_at",
+              "displayName": "ends_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "optimizeBulk": false
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        -160
+      ],
+      "id": "49cf8f85-10b0-47dd-9518-485eebd602a1",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  username: \"Free Games Bot\",\n  embeds: [\n    {\n      title: \"🎮 \" + $('Map fields').item.json.title,\n      url: $('Map fields').item.json.giveawayUrl,\n      description: $('Map fields').item.json.description,\n      image: {\n        url: $('Map fields').item.json.image\n      },\n      thumbnail: {\n        url: $('Map fields').item.json.thumbnail\n      },\n      fields: [\n        {\n          name: \"💰 Value\",\n          value: $('Map fields').item.json.worth || \"N/A\",\n          inline: true\n        },\n        {\n          name: \"🎮 Platform\",\n          value: $('Map fields').item.json.platforms || \"Unknown\",\n          inline: true\n        },\n        {\n          name: \"📦 Type\",\n          value: $('Map fields').item.json.type || \"Unknown\",\n          inline: true\n        },\n        {\n          name: \"⏰ Ends\",\n          value: $('Map fields').item.json.endDate || \"Unknown\",\n          inline: true\n        },\n        {\n          name: \"👥 Claimed\",\n          value: String($('Map fields').item.json.users || 0) + \" users\",\n          inline: true\n        },\n        {\n          name: \"📅 Published\",\n          value: $('Map fields').item.json.publishedDate || \"Unknown\",\n          inline: true\n        },\n        {\n          name: \"📋 Instructions\",\n          value: (($('Map fields').item.json.instructions || \"No instructions\").substring(0, 1024))\n        }\n      ],\n      footer: {\n        text: \"GamerPower • ID \" + $('Map fields').item.json.id\n      }\n    }\n  ]\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1504,
+        32
+      ],
+      "id": "0d5741e1-f77e-43dc-b53b-abb8eb5c2061",
+      "name": "Post to Fluxer Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "M47tIXuuRfbeluNM",
+          "mode": "list",
+          "cachedResultName": "gamerpower_seen",
+          "cachedResultUrl": "/projects/vFOqNMYXm28VHc07/datatables/M47tIXuuRfbeluNM"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "item_id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        704,
+        0
+      ],
+      "id": "db5ce24a-1137-4341-ae3d-cea4c5ebb88d",
+      "name": "If row does not exist"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "fFHyEOJsADVvNJBT",
+          "mode": "list",
+          "cachedResultName": "discord_webhooks",
+          "cachedResultUrl": "/projects/vFOqNMYXm28VHc07/datatables/fFHyEOJsADVvNJBT"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        32
+      ],
+      "id": "30f38d45-9270-4c2c-a4fb-94de36ff75d3",
+      "name": "Get webhooks",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6e0d4cf1-92de-4418-ade0-5c737f67f714",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        -80
+      ],
+      "id": "05c23c02-733a-4419-b17a-be7794fc7ff1",
+      "name": "Is item_id not empty"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "M47tIXuuRfbeluNM",
+          "mode": "list",
+          "cachedResultName": "gamerpower_seen",
+          "cachedResultUrl": "/projects/vFOqNMYXm28VHc07/datatables/M47tIXuuRfbeluNM"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        704,
+        192
+      ],
+      "id": "b34b2124-26bb-4578-b310-4e9bc294898f",
+      "name": "Get row(s)",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "M47tIXuuRfbeluNM",
+          "mode": "list",
+          "cachedResultName": "gamerpower_seen",
+          "cachedResultUrl": "/projects/vFOqNMYXm28VHc07/datatables/M47tIXuuRfbeluNM"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "item_id",
+              "keyValue": "={{ $json.item_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        192
+      ],
+      "id": "856367fb-4c30-4e87-a36f-16659b19f3fb",
+      "name": "Delete row(s)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1d00d8a4-7a4e-4b59-a0a3-e2f0251855bf",
+              "leftValue": "={{ $json.ends_at }}",
+              "rightValue": "={{ DateTime.now() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "before"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        192
+      ],
+      "id": "28621e8d-1dd0-4028-9928-8d3e5020a797",
+      "name": "Past endDate"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        32
+      ],
+      "id": "801386d3-87c0-414d-b132-c243f7a440a5",
+      "name": "Wait",
+      "webhookId": "184ae94a-0550-41c6-a172-d0b701a404fd"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1312,
+        32
+      ],
+      "id": "ba34c0d3-b40c-4a82-be16-3e6f9ad820a0",
+      "name": "Loop Over Items"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extract items valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract items valid": {
+      "main": [
+        [
+          {
+            "node": "Map fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map fields": {
+      "main": [
+        [
+          {
+            "node": "If row does not exist",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Fluxer Webhook": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If row does not exist": {
+      "main": [
+        [
+          {
+            "node": "Is item_id not empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get webhooks": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is item_id not empty": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "Past endDate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Past endDate": {
+      "main": [
+        [
+          {
+            "node": "Delete row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Post to Fluxer Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4432ce64-2f05-4900-85ad-d64bfcf7c58b",
+  "meta": {
+    "instanceId": "f912511c7f75a870d7b5ed082ea525b70ad62b6b98f14e409c2b26e82d90a680"
+  },
+  "nodeGroups": [],
+  "id": "i3OWEvz2qYrZPPGY",
+  "tags": []
+}
